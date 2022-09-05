@@ -15,10 +15,20 @@ fn server(path: PathBuf) {
 
             println!("Listening on {}", socket.local_addr().unwrap());
 
-            let ssl = openssl::ssl::SslAcceptor::mozilla_modern_v5(openssl::ssl::SslMethod::tls_server()).unwrap().build();
+            let mut ssl =
+                openssl::ssl::SslAcceptor::mozilla_modern_v5(openssl::ssl::SslMethod::tls_server())
+                    .unwrap();
+
+            ssl.set_private_key_file("src/key.pem", openssl::ssl::SslFiletype::PEM)
+                .unwrap();
+
+            ssl.set_certificate_chain_file("src/cert.pem").unwrap();
+
+            let ssl = ssl.build();
 
             let (tx, _) = socket.accept().await.unwrap();
-            let mut tx = SslStream::new(openssl::ssl::Ssl::new(ssl.context()).unwrap(), tx).unwrap();
+            let mut tx =
+                SslStream::new(openssl::ssl::Ssl::new(ssl.context()).unwrap(), tx).unwrap();
 
             tx.write_u64_le(size).await.unwrap();
 
@@ -50,8 +60,14 @@ fn client() {
 
             let rx = tokio::net::TcpStream::connect(ip_port).await.unwrap();
 
-            let ssl = openssl::ssl::SslConnector::builder(openssl::ssl::SslMethod::tls_client()).unwrap().build();
-            let mut rx = SslStream::new(openssl::ssl::Ssl::new(ssl.context()).unwrap(), rx).unwrap();
+            let mut ssl = openssl::ssl::SslConnector::builder(openssl::ssl::SslMethod::tls_client())
+                .unwrap();
+
+            ssl.set_ca_file("src/cert.pem").unwrap();
+
+            let ssl = ssl.build();
+            let mut rx =
+                SslStream::new(openssl::ssl::Ssl::new(ssl.context()).unwrap(), rx).unwrap();
 
             let size = rx.read_u64_le().await.unwrap();
 
