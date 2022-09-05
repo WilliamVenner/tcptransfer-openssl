@@ -16,13 +16,14 @@ fn server(path: PathBuf) {
             println!("Listening on {}", socket.local_addr().unwrap());
 
             let mut ssl =
-                openssl::ssl::SslAcceptor::mozilla_modern_v5(openssl::ssl::SslMethod::tls_server())
+                openssl::ssl::SslAcceptor::mozilla_intermediate(openssl::ssl::SslMethod::tls())
                     .unwrap();
 
             ssl.set_private_key_file("src/key.pem", openssl::ssl::SslFiletype::PEM)
                 .unwrap();
 
             ssl.set_certificate_chain_file("src/cert.pem").unwrap();
+            ssl.set_verify(openssl::ssl::SslVerifyMode::NONE);
 
             let ssl = ssl.build();
 
@@ -63,9 +64,10 @@ fn client() {
             let rx = tokio::net::TcpStream::connect(ip_port).await.unwrap();
 
             let mut ssl =
-                openssl::ssl::SslConnector::builder(openssl::ssl::SslMethod::tls_client()).unwrap();
+                openssl::ssl::SslConnector::builder(openssl::ssl::SslMethod::tls()).unwrap();
 
             ssl.set_ca_file("src/cert.pem").unwrap();
+            ssl.set_verify(openssl::ssl::SslVerifyMode::NONE);
 
             let ssl = ssl
                 .build()
