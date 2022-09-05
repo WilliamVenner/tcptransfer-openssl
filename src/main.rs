@@ -1,4 +1,4 @@
-use std::{io::Write, net::SocketAddr, path::PathBuf, str::FromStr, time::Instant};
+use std::{io::Write, net::SocketAddr, path::PathBuf, pin::Pin, str::FromStr, time::Instant};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio_openssl::SslStream;
 
@@ -30,6 +30,8 @@ fn server(path: PathBuf) {
             let mut tx =
                 SslStream::new(openssl::ssl::Ssl::new(ssl.context()).unwrap(), tx).unwrap();
 
+            Pin::new(&mut tx).accept().await.unwrap();
+
             tx.write_u64_le(size).await.unwrap();
 
             let start = Instant::now();
@@ -60,14 +62,20 @@ fn client() {
 
             let rx = tokio::net::TcpStream::connect(ip_port).await.unwrap();
 
-            let mut ssl = openssl::ssl::SslConnector::builder(openssl::ssl::SslMethod::tls_client())
-                .unwrap();
+            let mut ssl =
+                openssl::ssl::SslConnector::builder(openssl::ssl::SslMethod::tls_client()).unwrap();
 
             ssl.set_ca_file("src/cert.pem").unwrap();
 
-            let ssl = ssl.build();
-            let mut rx =
-                SslStream::new(openssl::ssl::Ssl::new(ssl.context()).unwrap(), rx).unwrap();
+            let ssl = ssl
+                .build()
+                .configure()
+                .unwrap()
+                .into_ssl("tcptransfer")
+                .unwrap();
+            let mut rx = SslStream::new(ssl, rx).unwrap();
+
+            Pin::new(&mut rx).connect().await.unwrap();
 
             let size = rx.read_u64_le().await.unwrap();
 
